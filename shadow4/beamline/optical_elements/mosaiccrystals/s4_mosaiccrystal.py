@@ -319,7 +319,7 @@ class S4MosaicCrystalElement(S4BeamlineElement):
         self._crystalpy_diffraction_setup = None
 
 
-    def set_crystalpy_diffraction_setup(self): # TODO chek is we need it
+    def set_crystalpy_diffraction_setup(self):
         """
         Returns the crystalpy DiffractionSetup.
 
@@ -328,55 +328,18 @@ class S4MosaicCrystalElement(S4BeamlineElement):
         instance of crystalpy DiffractionSetupAbstract
         """
         oe = self.get_optical_element()
-        coor = self.get_coordinates()
-
-        if oe._material_constants_library_flag == 0:
-            if is_verbose(): print("\nCreating a diffraction setup (XRAYLIB) for material:", oe._material)
-            diffraction_setup = DiffractionSetupXraylib(geometry_type=BraggDiffraction(),  # todo: use oe._diffraction_geometry
-                                                 crystal_name=oe._material,  # string
-                                                 thickness=oe._thickness,  # meters
-                                                 miller_h=oe._miller_index_h,  # int
-                                                 miller_k=oe._miller_index_k,  # int
-                                                 miller_l=oe._miller_index_l,  # int
-                                                 asymmetry_angle=oe._asymmetry_angle,                            # radians
-                                                 azimuthal_angle=0.0)
-        elif oe._material_constants_library_flag == 1:
-            if is_verbose(): print("\nCreating a diffraction setup (DABAX) for material:", oe._material)
-            diffraction_setup = DiffractionSetupDabax(geometry_type=BraggDiffraction(),  # todo: use oe._diffraction_geometry
-                                                 crystal_name=oe._material,  # string
-                                                 thickness=oe._thickness,  # meters
-                                                 miller_h=oe._miller_index_h,  # int
-                                                 miller_k=oe._miller_index_k,  # int
-                                                 miller_l=oe._miller_index_l,  # int
-                                                 asymmetry_angle=oe._asymmetry_angle,  # radians
-                                                 azimuthal_angle=0.0,
-                                                 dabax=oe._dabax)
-        elif oe._material_constants_library_flag == 2:
-            if is_verbose(): print("\nCreating a diffraction setup (shadow preprocessor file V1)...")
-            diffraction_setup = DiffractionSetupShadowPreprocessorV1(geometry_type=BraggDiffraction(),  # todo: use oe._diffraction_geometry
-                                                 crystal_name=oe._material,            # string
-                                                 thickness=oe._thickness,              # meters
-                                                 miller_h=oe._miller_index_h,          # int
-                                                 miller_k=oe._miller_index_k,          # int
-                                                 miller_l=oe._miller_index_l,          # int
-                                                 asymmetry_angle=oe._asymmetry_angle,  # radians
-                                                 azimuthal_angle=0.0,
-                                                 preprocessor_file=oe._file_refl)
-        elif oe._material_constants_library_flag == 3:
-            if is_verbose(): print("\nCreating a diffraction setup (shadow preprocessor file V2)...")
-            diffraction_setup = DiffractionSetupShadowPreprocessorV2(geometry_type=BraggDiffraction(),  # todo: use oe._diffraction_geometry
-                                                 crystal_name=oe._material,            # string
-                                                 thickness=oe._thickness,              # meters
-                                                 miller_h=oe._miller_index_h,          # int
-                                                 miller_k=oe._miller_index_k,          # int
-                                                 miller_l=oe._miller_index_l,          # int
-                                                 asymmetry_angle=oe._asymmetry_angle,  # radians
-                                                 azimuthal_angle=0.0,
-                                                 preprocessor_file=oe._file_refl)
-        else:
-            raise NotImplementedError
-
-        self._crystalpy_diffraction_setup = diffraction_setup
+        
+        self._crystalpy_diffraction_setup = DiffractionSetupDabax(
+            geometry_type=BraggDiffraction(),
+            crystal_name=oe._material,
+            thickness=oe._thickness,  # metri
+            miller_h=oe._miller_index_h,
+            miller_k=oe._miller_index_k,
+            miller_l=oe._miller_index_l,
+            asymmetry_angle=oe._asymmetry_angle,  # radianti
+            azimuthal_angle=0.0,
+            dabax=oe._dabax,
+        )
 
     def align_crystal(self):
         """
