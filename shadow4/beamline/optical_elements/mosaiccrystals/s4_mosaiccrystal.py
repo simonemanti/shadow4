@@ -513,6 +513,11 @@ class S4MosaicCrystalElement(S4BeamlineElement):
                 print("    >>>>>> normal: ", normal.shape, normal[:, 0])
 
             vIn, vOut, r_SS, r_PP = self._calculate_perfect_crystal_scattering(footprint, normal)
+
+            r_SS, r_PP = self._calculate_mosaic_reflectivity(footprint, normal)
+            # vIn, vOut = self._calculate_mosaic_scattering(footprint, normal)
+
+
             jv_out_0, jv_out_1, ee_S, ee_P = self._calculate_jones_and_efield_directions(footprint, normal,
                                                                                             vIn, vOut, r_SS, r_PP)
             # update beam array with the new direction
@@ -542,6 +547,78 @@ class S4MosaicCrystalElement(S4BeamlineElement):
             footprint, normal = self._apply_crystal_diffraction_and_reflectivities_S3(input_beam)
 
         return footprint, normal
+
+    def _calculate_mosaic_reflectivity(self, footprint, normal):
+        self.set_crystalpy_diffraction_setup()
+        setup  =self._crystalpy_diffraction_setup
+
+
+        # We need for crystalpy the upwards normal
+        soe = self.get_optical_element()
+        ccc = soe.get_optical_surface_instance()
+
+        if isinstance(ccc, S4Mesh): # normal is outwards!
+            surface_normal = normal # Vector(normal[0], normal[1], normal[2])  # normal is outwards!
+        elif isinstance(ccc, S4Toroid): # normal is inwards!
+            if ccc.f_torus == 0 or ccc.f_torus == 2:
+                surface_normal = normal * (-1) # Vector(normal[0], normal[1], normal[2]).scalarMultiplication(
+                    # -1.0)  # normal is inwards!
+            else:
+                surface_normal = normal # Vector(normal[0], normal[1], normal[2])  # normal is outwards!
+        else:  # conbics
+            surface_normal = normal * (-1) # Vector(normal[0], normal[1], normal[2]).scalarMultiplication(-1.0)  # normal is inwards!
+
+        # # calculate vector H
+        # # Geometrical convention from M.Sanchez del Rio et al., J.Appl.Cryst.(2015). 48, 477-491.
+        # bragg_normal = surface_normal.getVectorH(
+        #     surface_normal,
+        #     self._crystalpy_diffraction_setup.dSpacingSI(),
+        #     asymmetry_angle=self._crystalpy_diffraction_setup.asymmetryAngle(),
+        #     azimuthal_angle=self._crystalpy_diffraction_setup.azimuthalAngle())
+
+
+
+
+
+
+        energyin_eV = footprint.get_column(26)
+        wavelength = footprint.get_column(19) # in A
+        print("lambda: ", wavelength)
+
+        vx = footprint.get_column(4)
+        vy = footprint.get_column(5)
+        vz = footprint.get_column(6)
+
+        # print(normal.shape) # (3,5000)
+
+        nx = surface_normal[0, :]
+        ny = surface_normal[1, :]
+        nz = surface_normal[2, :]
+        print(nx[0:3], ny[0:3], nz[0:3])
+        vIn = numpy.zeros((footprint.N, 3))
+        vIn[:, 0] = vx
+        vIn[:, 1] = vy
+        vIn[:, 2] = vz
+
+        sin_theta = vector_dot(vIn, normal.T) # vector_* works on shape (N, 3)
+        theta = numpy.arcsin(sin_theta)
+        theta_bragg = setup.angleBragg(energyin_eV)
+        theta_diff = theta - theta_bragg
+
+        print(numpy.degrees(theta_bragg), numpy.degrees(theta), numpy.degrees(theta_diff))
+
+
+
+        R_SS = numpy.ones(footprint.N, dtype=float)
+        R_PP = numpy.ones(footprint.N, dtype=float)
+
+        r_SS = numpy.sqrt(R_SS) + 0j
+        r_PP = numpy.sqrt(R_PP) + 0j
+        return r_SS, r_PP
+
+    def _calculate_mosaic_scattering(self, footprint, normal):
+        pass
+
 
     def _calculate_perfect_crystal_scattering(self, footprint1, normal):
         """
