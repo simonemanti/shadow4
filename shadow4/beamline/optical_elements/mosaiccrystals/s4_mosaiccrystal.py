@@ -29,7 +29,7 @@ from shadow4.optical_surfaces.s4_mesh import S4Mesh
 from shadow4.optical_surfaces.s4_toroid import S4Toroid
 
 from shadow4.tools.logger import is_verbose, is_debug
-from shadow4.tools.arrayofvectors import vector_modulus_square, vector_modulus, vector_norm, vector_rotate_around_axis
+from shadow4.tools.arrayofvectors import vector_modulus_square, vector_modulus, vector_norm, vector_rotate_around_axis, vector_cross, vector_reflection
 from shadow4.tools.logger import is_verbose, is_debug
 
 import scipy.constants as codata
@@ -512,12 +512,9 @@ class S4MosaicCrystalElement(S4BeamlineElement):
                 print("    >>>>>> vout: ", footprint.get_columns([4, 5, 6])[:, 0])
                 print("    >>>>>> normal: ", normal.shape, normal[:, 0])
 
-            vIn, vOut, r_SS, r_PP = self._calculate_perfect_crystal_scattering(footprint, normal)
-
             r_SS, r_PP = self._calculate_mosaic_reflectivity(footprint, normal)
-            # vIn, vOut = self._calculate_mosaic_scattering(footprint, normal)
-
-
+            vIn, vOut = self._calculate_mosaic_reflection(footprint, normal)
+            
             jv_out_0, jv_out_1, ee_S, ee_P = self._calculate_jones_and_efield_directions(footprint, normal,
                                                                                             vIn, vOut, r_SS, r_PP)
             # update beam array with the new direction
@@ -610,8 +607,70 @@ class S4MosaicCrystalElement(S4BeamlineElement):
 
         return amplitude(Q_s), amplitude(Q_p)
 
-    def _calculate_mosaic_scattering(self, footprint, normal):
-        pass
+    def _calculate_mosaic_reflection(self, footprint, normal):
+
+        if self._crystalpy_diffraction_setup is None:
+            self.set_crystalpy_diffraction_setup()
+            
+        setup = self._crystalpy_diffraction_setup
+        soe = self.get_optical_element()
+        if soe._asymmetry_angle != 0.0:
+            raise NotImplementedError("Mosaic reflectivity currently requires a symmetric cut.")
+        if soe._thickness < 0 or not numpy.isfinite(soe._thickness):
+            raise ValueError("Crystal thickness must be finite and non-negative.")
+
+        ccc = soe.get_optical_surface_instance()
+        if isinstance(ccc, S4Mesh):
+            surface_normal = normal
+        elif isinstance(ccc, S4Toroid):
+            surface_normal = -normal if ccc.f_torus in (0, 2) else normal
+        else:
+            surface_normal = -normal
+
+        energies = footprint.get_photon_energy_eV()
+        vIn = footprint.get_columns([4, 5, 6]).T
+
+        # 1. Calculate Delta and a1
+        sin_theta = -vector_dot(vIn, surface_normal.T)
+        theta = numpy.arcsin(numpy.clip(sin_theta, -1.0, 1.0))
+        theta_bragg = setup.angleBragg(energies)
+        delta = theta_bragg - theta
+        a1 = vector_cross(vIn, surface_normal.T)
+
+        # 2. Calculate the reflected direction using the Bragg condition
+        n1 = vector_rotate_around_axis(surface_normal.T, a1, delta)
+
+        # 3. Sample beta using the Gaussian approximation of the 2013 model
+        cos_alpha = -vector_dot(vIn, surface_normal.T)
+        alpha = numpy.arccos(numpy.clip(cos_alpha, -1.0, 1.0))
+        theta_D = numpy.pi / 2 - theta_bragg
+
+        kappa = (
+            numpy.radians(soe._mosaicity_fwhm_deg)
+            / numpy.sqrt(8 * numpy.log(2))
+        )
+        if not numpy.isfinite(kappa) or kappa <= 0:
+            raise ValueError("Gaussian mosaicity FWHM must be finite and positive.")
+
+        # sinc(u/pi) = sin(u)/u, with the correct limit at u = 0
+        u = alpha - theta_D
+        s1 = numpy.sin(alpha) * numpy.sin(theta_D) / numpy.sinc(u / numpy.pi)
+
+        if numpy.any(~numpy.isfinite(s1)) or numpy.any(s1 <= 0):
+            raise ValueError("Gaussian beta sampling requires finite, positive s1.")
+
+        sigma_beta = kappa / numpy.sqrt(s1)
+        beta = numpy.random.normal(loc=0.0, scale=sigma_beta)
+        
+        print(beta)
+
+        # 4. Calculate n2
+        n2 = vector_rotate_around_axis(n1, vIn, beta)
+
+        # 5. Calculcate the reflected direction vOut
+        vOut = vector_reflection(vIn, n2)     
+
+        return vIn, vOut
 
 
     def _calculate_perfect_crystal_scattering(self, footprint1, normal):
