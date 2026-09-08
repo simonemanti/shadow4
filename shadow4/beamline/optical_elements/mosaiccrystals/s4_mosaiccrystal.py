@@ -549,72 +549,66 @@ class S4MosaicCrystalElement(S4BeamlineElement):
         return footprint, normal
 
     def _calculate_mosaic_reflectivity(self, footprint, normal):
-        self.set_crystalpy_diffraction_setup()
-        setup  =self._crystalpy_diffraction_setup
+        """Return sigma/pi amplitude factors for a symmetric mosaic crystal.
 
-
-        # We need for crystalpy the upwards normal
+        Uses a Gaussian orientation profile and the finite-thickness
+        reflectivity of the 1992 model, with the corrected Q coefficients.
+        No mosaic orientation or penetration sampling is performed.
+        """
+        if self._crystalpy_diffraction_setup is None:
+            self.set_crystalpy_diffraction_setup()
+            
+        setup = self._crystalpy_diffraction_setup
         soe = self.get_optical_element()
+        if soe._asymmetry_angle != 0.0:
+            raise NotImplementedError("Mosaic reflectivity currently requires a symmetric cut.")
+        if soe._thickness < 0 or not numpy.isfinite(soe._thickness):
+            raise ValueError("Crystal thickness must be finite and non-negative.")
+
         ccc = soe.get_optical_surface_instance()
+        if isinstance(ccc, S4Mesh):
+            surface_normal = normal
+        elif isinstance(ccc, S4Toroid):
+            surface_normal = -normal if ccc.f_torus in (0, 2) else normal
+        else:
+            surface_normal = -normal
 
-        if isinstance(ccc, S4Mesh): # normal is outwards!
-            surface_normal = normal # Vector(normal[0], normal[1], normal[2])  # normal is outwards!
-        elif isinstance(ccc, S4Toroid): # normal is inwards!
-            if ccc.f_torus == 0 or ccc.f_torus == 2:
-                surface_normal = normal * (-1) # Vector(normal[0], normal[1], normal[2]).scalarMultiplication(
-                    # -1.0)  # normal is inwards!
-            else:
-                surface_normal = normal # Vector(normal[0], normal[1], normal[2])  # normal is outwards!
-        else:  # conbics
-            surface_normal = normal * (-1) # Vector(normal[0], normal[1], normal[2]).scalarMultiplication(-1.0)  # normal is inwards!
-
-        # # calculate vector H
-        # # Geometrical convention from M.Sanchez del Rio et al., J.Appl.Cryst.(2015). 48, 477-491.
-        # bragg_normal = surface_normal.getVectorH(
-        #     surface_normal,
-        #     self._crystalpy_diffraction_setup.dSpacingSI(),
-        #     asymmetry_angle=self._crystalpy_diffraction_setup.asymmetryAngle(),
-        #     azimuthal_angle=self._crystalpy_diffraction_setup.azimuthalAngle())
-
-
-
-
-
-
-        energyin_eV = footprint.get_column(26)
-        wavelength = footprint.get_column(19) # in A
-        print("lambda: ", wavelength)
-
-        vx = footprint.get_column(4)
-        vy = footprint.get_column(5)
-        vz = footprint.get_column(6)
-
-        # print(normal.shape) # (3,5000)
-
-        nx = surface_normal[0, :]
-        ny = surface_normal[1, :]
-        nz = surface_normal[2, :]
-        print(nx[0:3], ny[0:3], nz[0:3])
-        vIn = numpy.zeros((footprint.N, 3))
-        vIn[:, 0] = vx
-        vIn[:, 1] = vy
-        vIn[:, 2] = vz
-
-        sin_theta = vector_dot(vIn, normal.T) # vector_* works on shape (N, 3)
-        theta = numpy.arcsin(sin_theta)
-        theta_bragg = setup.angleBragg(energyin_eV)
+        energies = footprint.get_photon_energy_eV()
+        v_in = footprint.get_columns([4, 5, 6]).T
+        sin_theta = -vector_dot(v_in, surface_normal.T)
+        theta = numpy.arcsin(numpy.clip(sin_theta, -1.0, 1.0))
+        theta_bragg = setup.angleBragg(energies)
         theta_diff = theta - theta_bragg
 
-        print(numpy.degrees(theta_bragg), numpy.degrees(theta), numpy.degrees(theta_diff))
+        lambda_cm = codata.h * codata.c / (codata.e * energies) * 100
+        mu = -2 * numpy.pi / lambda_cm * numpy.imag(setup.psi0(energies))
+        Q_s = (numpy.pi**2 * numpy.abs(setup.psiH(energies) * setup.psiH_bar(energies))
+               / (lambda_cm * numpy.sin(2 * theta_bragg)))
+        Q_p = Q_s * numpy.cos(2 * theta_bragg)**2
 
+        # Gaussian profile is intentionally fixed; its FWHM comes from the element.
+        kappa = numpy.radians(soe._mosaicity_fwhm_deg) / numpy.sqrt(8 * numpy.log(2))
+        if not numpy.isfinite(kappa) or kappa <= 0:
+            raise ValueError("Gaussian mosaicity FWHM must be finite and positive.")
+        w = numpy.exp(-0.5 * (theta_diff / kappa)**2) / (kappa * numpy.sqrt(2 * numpy.pi))
+        if numpy.any(~numpy.isfinite(mu)) or numpy.any(mu < 0):
+            raise ValueError("Absorption coefficients must be finite and non-negative.")
 
+        path_cm = soe._thickness * 100 / numpy.sin(theta_bragg)
 
-        R_SS = numpy.ones(footprint.N, dtype=float)
-        R_PP = numpy.ones(footprint.N, dtype=float)
+        def amplitude(Q):
+            eta = w * Q
+            # Algebraically equivalent to Eq. (8), without division by mu or
+            # tanh(0). Includes the zero-thickness and zero-absorption limits.
+            x = path_cm * numpy.sqrt(mu * (mu + 2 * eta))
+            tanhc = numpy.ones_like(x)
+            numpy.divide(numpy.tanh(x), x, out=tanhc, where=x != 0)
+            effective_path = path_cm * tanhc
+            reflectivity = eta * effective_path / (1 + (mu + eta) * effective_path)
+            reflectivity = numpy.where(sin_theta > 0, reflectivity, 0.0)
+            return numpy.sqrt(reflectivity).astype(complex)
 
-        r_SS = numpy.sqrt(R_SS) + 0j
-        r_PP = numpy.sqrt(R_PP) + 0j
-        return r_SS, r_PP
+        return amplitude(Q_s), amplitude(Q_p)
 
     def _calculate_mosaic_scattering(self, footprint, normal):
         pass

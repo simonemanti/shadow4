@@ -223,11 +223,11 @@ if __name__ == "__main__":
     #
     from shadow4.sources.source_geometrical.source_geometrical import SourceGeometrical
 
-    light_source = SourceGeometrical(name='Geometrical Source', nrays=5000, seed=5676561)
+    light_source = SourceGeometrical(name='Geometrical Source', nrays=15000, seed=5676561)
     light_source.set_spatial_type_point()
     light_source.set_depth_distribution_off()
     light_source.set_angular_distribution_gaussian(sigdix=1e-06, sigdiz=1e-06)
-    light_source.set_energy_distribution_uniform(value_min=9950, value_max=10050, unit='eV')
+    light_source.set_energy_distribution_uniform(value_min=9000, value_max=11000, unit='eV')
     light_source.set_polarization(polarization_degree=1, phase_diff=0, coherent_beam=0)
     beam = light_source.get_beam()
 
@@ -273,7 +273,7 @@ if __name__ == "__main__":
         from srxraylib.plot.gol import plot_scatter
 
         plot_scatter(beam.get_photon_energy_eV(nolost=1), beam.get_column(23, nolost=1),
-                     title='(Intensity,Photon Energy)', plot_histograms=0, yrange=[0,1.1])
+                     title='(Intensity,Photon Energy)', plot_histograms=0)#, yrange=[0,1.1])
         plot_scatter(1e6 * beam.get_column(1, nolost=1), 1e6 * beam.get_column(3, nolost=1), title='(X,Z) in microns')
 
 
