@@ -514,9 +514,14 @@ class S4MosaicCrystalElement(S4BeamlineElement):
 
             r_SS, r_PP = self._calculate_mosaic_reflectivity(footprint, normal)
             vIn, vOut = self._calculate_mosaic_reflection(footprint, normal)
-            
+            rIn, rOut = self._sample_mosaic_penetration(footprint, normal)
+
             jv_out_0, jv_out_1, ee_S, ee_P = self._calculate_jones_and_efield_directions(footprint, normal,
                                                                                             vIn, vOut, r_SS, r_PP)
+            # update beam array with the new position
+            footprint.set_column(1, rOut[:, 0])
+            footprint.set_column(2, rOut[:, 1])
+            footprint.set_column(3, rOut[:, 2])
             # update beam array with the new direction
             footprint.set_column(4, vOut[:, 0])
             footprint.set_column(5, vOut[:, 1])
@@ -661,8 +666,6 @@ class S4MosaicCrystalElement(S4BeamlineElement):
 
         sigma_beta = kappa / numpy.sqrt(s1)
         beta = numpy.random.normal(loc=0.0, scale=sigma_beta)
-        
-        print(beta)
 
         # 4. Calculate n2
         n2 = vector_rotate_around_axis(n1, vIn, beta)
@@ -672,6 +675,64 @@ class S4MosaicCrystalElement(S4BeamlineElement):
 
         return vIn, vOut
 
+    def _sample_mosaic_penetration(self, footprint, normal):
+
+        if self._crystalpy_diffraction_setup is None:
+            self.set_crystalpy_diffraction_setup()
+            
+        setup = self._crystalpy_diffraction_setup
+        soe = self.get_optical_element()
+        if soe._asymmetry_angle != 0.0:
+            raise NotImplementedError("Mosaic reflectivity currently requires a symmetric cut.")
+        if soe._thickness < 0 or not numpy.isfinite(soe._thickness):
+            raise ValueError("Crystal thickness must be finite and non-negative.")
+
+        ccc = soe.get_optical_surface_instance()
+        if isinstance(ccc, S4Mesh):
+            surface_normal = normal
+        elif isinstance(ccc, S4Toroid):
+            surface_normal = -normal if ccc.f_torus in (0, 2) else normal
+        else:
+            surface_normal = -normal
+
+        energies = footprint.get_photon_energy_eV()
+        vIn = footprint.get_columns([4, 5, 6]).T
+        sin_theta = -vector_dot(vIn, surface_normal.T)
+        theta = numpy.arcsin(numpy.clip(sin_theta, -1.0, 1.0))
+        theta_bragg = setup.angleBragg(energies)
+        theta_diff = theta - theta_bragg
+
+        lambda_cm = codata.h * codata.c / (codata.e * energies) * 100
+        # Only s polarization for now!
+        Q_s = (numpy.pi**2 * numpy.abs(setup.psiH(energies) * setup.psiH_bar(energies))
+               / (lambda_cm * numpy.sin(2 * theta_bragg)))
+
+        kappa = numpy.radians(soe._mosaicity_fwhm_deg) / numpy.sqrt(8 * numpy.log(2))
+        if not numpy.isfinite(kappa) or kappa <= 0:
+            raise ValueError("Gaussian mosaicity FWHM must be finite and positive.")
+        w = numpy.exp(-0.5 * (theta_diff / kappa)**2) / (kappa * numpy.sqrt(2 * numpy.pi))
+
+        eta_cm = w * Q_s
+
+        # Maximum path length in cm: _thickness is in meters
+        L_cm = 100.0 * soe._thickness / numpy.abs(
+            vector_dot(vIn, surface_normal.T)
+        )
+
+        # Uniform random numbers in [0, 1)
+        u = numpy.random.random(size=vIn.shape[0])
+
+        # Sample a truncated exponential: eta_cm in cm^-1, s_cm in cm
+        s_cm = -numpy.log1p(u * numpy.expm1(-eta_cm * L_cm)) / eta_cm
+
+        # Entry positions in meters, shape (N, 3)
+        rin = footprint.get_columns([1, 2, 3]).T
+
+        # Internal diffraction positions in meters
+        rout = rin + (s_cm / 100.0)[:, None] * vIn
+
+        return rin, rout
+                
 
     def _calculate_perfect_crystal_scattering(self, footprint1, normal):
         """
