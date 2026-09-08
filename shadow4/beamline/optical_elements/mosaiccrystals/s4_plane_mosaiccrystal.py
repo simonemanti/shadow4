@@ -124,6 +124,8 @@ class S4PlaneMosaicCrystal(S4MosaicCrystal, S4PlaneOpticalElementDecorator):
             "material_constants_library_flag": material_constants_library_flag,
             # "method_efields_management": method_efields_management,
             "dabax": self._get_dabax_txt(),
+            "mosaicity_fwhm_deg": mosaicity_fwhm_deg,
+            "mosaicity_profile_flag": mosaicity_profile_flag,  # 0=Gaussian, 1=Lorentzian
             }
 
     def to_python_code(self, **kwargs):
@@ -142,19 +144,19 @@ class S4PlaneMosaicCrystal(S4MosaicCrystal, S4PlaneOpticalElementDecorator):
         txt = self.to_python_code_boundary_shape()
         txt_pre = """
 
-from shadow4.beamline.optical_elements.crystals.s4_plane_crystal import S4PlaneCrystal
-optical_element = S4PlaneCrystal(name='{name}',"""
-    # boundary_shape=boundary_shape, material='{material}',
-    # miller_index_h={miller_index_h}, miller_index_k={miller_index_k}, miller_index_l={miller_index_l},
-    # f_bragg_a={f_bragg_a}, asymmetry_angle={asymmetry_angle},
-    # is_thick={is_thick}, thickness={thickness},
-    # f_central={f_central}, f_phot_cent={f_phot_cent}, phot_cent={phot_cent},
-    # file_refl='{file_refl}',
-    # f_ext={f_ext},
-    # material_constants_library_flag={material_constants_library_flag}, # 0=xraylib,1=dabax,2=preprocessor v1,3=preprocessor v2
-    # method_efields_management={method_efields_management}, # 0=new in S4; 1=like in S3
-    # dabax={dabax}, # used when material_constants_library_flag=1,
-    # )"""
+from shadow4.beamline.optical_elements.mosaiccrystals.s4_plane_mosaiccrystal import S4PlaneMosaicCrystal
+optical_element = S4PlaneMosaicCrystal(name='{name}',
+    boundary_shape=boundary_shape, material='{material}',
+    miller_index_h={miller_index_h}, miller_index_k={miller_index_k}, miller_index_l={miller_index_l},
+    asymmetry_angle={asymmetry_angle},
+    thickness={thickness},
+    f_central={f_central}, f_phot_cent={f_phot_cent}, phot_cent={phot_cent},
+    file_refl='{file_refl}',
+    material_constants_library_flag={material_constants_library_flag}, # 0=xraylib,1=dabax,2=preprocessor v1,3=preprocessor v2
+    dabax={dabax}, # used when material_constants_library_flag=1,
+    mosaicity_fwhm_deg={mosaicity_fwhm_deg},
+    mosaicity_profile_flag={mosaicity_profile_flag},  # 0=Gaussian, 1=Lorentzian
+    )"""
         txt += txt_pre.format(**self.__inputs)
 
         return txt
@@ -205,8 +207,8 @@ class S4PlaneMosaicCrystalElement(S4MosaicCrystalElement):
         txt += self.get_optical_element().to_python_code()
         txt += self.to_python_code_coordinates()
         txt += self.to_python_code_movements()
-        txt += "\nfrom shadow4.beamline.optical_elements.crystals.s4_plane_crystal import S4PlaneCrystalElement"
-        txt += "\nbeamline_element = S4PlaneCrystalElement(optical_element=optical_element,coordinates=coordinates, movements=movements, input_beam=beam)"
+        txt += "\nfrom shadow4.beamline.optical_elements.mosaiccrystals.s4_plane_mosaiccrystal import S4PlaneMosaicCrystalElement"
+        txt += "\nbeamline_element = S4PlaneMosaicCrystalElement(optical_element=optical_element,coordinates=coordinates, movements=movements, input_beam=beam)"
         txt += "\n\nbeam, footprint = beamline_element.trace_beam()"
         return txt
 
@@ -280,3 +282,5 @@ if __name__ == "__main__":
     print(beamline_element.info())
 
     print(beam.get_intensity(nolost=1))
+
+    print(beamline.to_python_code())
