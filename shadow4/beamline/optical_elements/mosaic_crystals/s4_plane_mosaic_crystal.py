@@ -1,7 +1,6 @@
 """
-The s4 plane crystal (optical element and beamline element).
+The s4 plane mosaic crystal (optical element and beamline element).
 """
-import numpy
 from syned.beamline.element_coordinates import ElementCoordinates
 
 from shadow4.beam.s4_beam import S4Beam
@@ -9,12 +8,11 @@ from shadow4.beamline.optical_elements.mosaic_crystals.s4_mosaic_crystal import 
 from shadow4.beamline.s4_optical_element_decorators import S4PlaneOpticalElementDecorator
 from shadow4.beamline.s4_beamline_element_movements import S4BeamlineElementMovements
 
-from syned.beamline.optical_elements.crystals.crystal import DiffractionGeometry
 
 class S4PlaneMosaicCrystal(S4MosaicCrystal, S4PlaneOpticalElementDecorator):
     """
     Shadow4 Plane Crystal Class
-    This is a plane perfect crystal in reflection geometry (Bragg), using the diffracted beam.
+    This is a plane mosaic crystal in reflection geometry (Bragg), using the diffracted beam.
 
     Constructor.
 
@@ -59,7 +57,7 @@ class S4PlaneMosaicCrystal(S4MosaicCrystal, S4PlaneOpticalElementDecorator):
 
     Returns
     -------
-    instance of S4PlaneCrystal.
+    instance of S4PlaneMosaicCrystal.
     """
     def __init__(self,
                  name="Undefined",
@@ -164,7 +162,7 @@ optical_element = S4PlaneMosaicCrystal(name='{name}',
 class S4PlaneMosaicCrystalElement(S4MosaicCrystalElement):
     """
     The Shadow4 plane crystal element.
-    It is made of a S4PlaneCrystal and an ElementCoordinates instance. It also includes the input beam.
+    It is made of a S4PlaneMosaicCrystal and an ElementCoordinates instance. It also includes the input beam.
 
     Constructor.
 
@@ -214,7 +212,6 @@ class S4PlaneMosaicCrystalElement(S4MosaicCrystalElement):
 
 
 if __name__ == "__main__":
-    import numpy as np
     from dabax.dabax_xraylib import DabaxXraylib
     from shadow4.beamline.s4_beamline import S4Beamline
 
@@ -238,8 +235,6 @@ if __name__ == "__main__":
     # optical element number XX
     boundary_shape = None
 
-    from shadow4.beamline.optical_elements.crystals.s4_plane_crystal import S4PlaneCrystal
-
     optical_element = S4PlaneMosaicCrystal(name='Generic Crystal',
                                      boundary_shape=boundary_shape, material='Si',
                                      miller_index_h=1, miller_index_k=1, miller_index_l=1,
@@ -261,7 +256,6 @@ if __name__ == "__main__":
     coordinates = ElementCoordinates(p=30, q=0, angle_radial=1.371743969, angle_azimuthal=0,
                                      angle_radial_out=1.371743969)
     movements = None
-    from shadow4.beamline.optical_elements.crystals.s4_plane_crystal import S4PlaneCrystalElement
 
     beamline_element = S4PlaneMosaicCrystalElement(optical_element=optical_element, coordinates=coordinates,
                                              movements=movements, input_beam=beam)
