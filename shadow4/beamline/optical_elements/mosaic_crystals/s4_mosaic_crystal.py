@@ -18,9 +18,6 @@ from crystalpy.diffraction.GeometryType import BraggDiffraction
 
 from dabax.dabax_xraylib import DabaxXraylib
 
-from shadow4.optical_surfaces.s4_mesh import S4Mesh
-from shadow4.optical_surfaces.s4_toroid import S4Toroid
-
 import scipy.constants as codata
 
 
@@ -504,6 +501,18 @@ class S4MosaicCrystalElement(S4BeamlineElement):
 
         return footprint, normal
 
+    @staticmethod
+    def _incident_facing_normal(footprint, normal):
+        """Orient surface normals toward the incident beam, independently of shape.
+
+        Multiplying conic coefficients by -1 reverses their normals without
+        changing the surface. Hyperboloids and toroid branches also differ in
+        this convention. All mosaic calculations require an incident-facing normal.
+        """
+        v_in = footprint.get_columns([4, 5, 6]).T
+        reverse = vector_dot(v_in, normal.T) > 0
+        return normal * numpy.where(reverse, -1.0, 1.0)[numpy.newaxis, :]
+
     def _calculate_mosaic_reflectivity(self, footprint, normal):
         """
         Calculates the amplitude reflectivity for a symmetric mosaic crystal.
@@ -545,13 +554,7 @@ class S4MosaicCrystalElement(S4BeamlineElement):
         if soe._thickness < 0 or not numpy.isfinite(soe._thickness):
             raise ValueError("Crystal thickness must be finite and non-negative.")
 
-        ccc = soe.get_optical_surface_instance()
-        if isinstance(ccc, S4Mesh):
-            surface_normal = normal
-        elif isinstance(ccc, S4Toroid):
-            surface_normal = -normal if ccc.f_torus in (0, 2) else normal
-        else:
-            surface_normal = -normal
+        surface_normal = self._incident_facing_normal(footprint, normal)
 
         energies = footprint.get_photon_energy_eV()
         v_in = footprint.get_columns([4, 5, 6]).T
@@ -631,13 +634,7 @@ class S4MosaicCrystalElement(S4BeamlineElement):
         if soe._thickness < 0 or not numpy.isfinite(soe._thickness):
             raise ValueError("Crystal thickness must be finite and non-negative.")
 
-        ccc = soe.get_optical_surface_instance()
-        if isinstance(ccc, S4Mesh):
-            surface_normal = normal
-        elif isinstance(ccc, S4Toroid):
-            surface_normal = -normal if ccc.f_torus in (0, 2) else normal
-        else:
-            surface_normal = -normal
+        surface_normal = self._incident_facing_normal(footprint, normal)
 
         energies = footprint.get_photon_energy_eV()
         vIn = footprint.get_columns([4, 5, 6]).T
@@ -723,13 +720,7 @@ class S4MosaicCrystalElement(S4BeamlineElement):
         if soe._thickness < 0 or not numpy.isfinite(soe._thickness):
             raise ValueError("Crystal thickness must be finite and non-negative.")
 
-        ccc = soe.get_optical_surface_instance()
-        if isinstance(ccc, S4Mesh):
-            surface_normal = normal
-        elif isinstance(ccc, S4Toroid):
-            surface_normal = -normal if ccc.f_torus in (0, 2) else normal
-        else:
-            surface_normal = -normal
+        surface_normal = self._incident_facing_normal(footprint, normal)
 
         energies = footprint.get_photon_energy_eV()
         vIn = footprint.get_columns([4, 5, 6]).T
