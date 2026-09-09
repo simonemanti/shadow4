@@ -809,17 +809,32 @@ class S4MosaicCrystalElement(S4BeamlineElement):
         w = numpy.exp(-0.5 * (theta_diff / kappa)**2) / (kappa * numpy.sqrt(2 * numpy.pi))
 
         eta_cm = w * Q_s
+        if numpy.any(~numpy.isfinite(eta_cm)) or numpy.any(eta_cm < 0):
+            raise ValueError("Scattering coefficients must be finite and non-negative.")
+
+        # Absolute cosine of the incidence angle relative to the surface normal
+        cos_incidence = numpy.abs(vector_dot(vIn, surface_normal.T))
+        if numpy.any(~numpy.isfinite(cos_incidence)) or numpy.any(cos_incidence == 0):
+            raise ValueError("Penetration sampling requires finite, non-zero incidence cosines.")
 
         # Maximum path length in cm: _thickness is in meters
-        L_cm = 100.0 * soe._thickness / numpy.abs(
-            vector_dot(vIn, surface_normal.T)
-        )
+        L_cm = 100.0 * soe._thickness / cos_incidence
+        if numpy.any(~numpy.isfinite(L_cm)) or numpy.any(L_cm < 0):
+            raise ValueError("Maximum path lengths must be finite and non-negative.")
 
         # Uniform random numbers in [0, 1)
         u = numpy.random.random(size=vIn.shape[0])
 
-        # Sample a truncated exponential: eta_cm in cm^-1, s_cm in cm
-        s_cm = -numpy.log1p(u * numpy.expm1(-eta_cm * L_cm)) / eta_cm
+        # Uniform limit for eta_cm == 0
+        s_cm = u * L_cm
+
+        # Truncated exponential for eta_cm > 0
+        numpy.divide(
+            -numpy.log1p(u * numpy.expm1(-eta_cm * L_cm)),
+            eta_cm,
+            out=s_cm,
+            where=eta_cm > 0,
+        )
 
         # Entry positions in meters, shape (N, 3)
         rin = footprint.get_columns([1, 2, 3]).T
