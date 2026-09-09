@@ -30,12 +30,6 @@ class S4PlaneMosaicCrystal(S4MosaicCrystal, S4PlaneOpticalElementDecorator):
         The Miller index K.
     miller_index_l : int, optional
         The Miller index L.
-    f_bragg_a : int, optional
-        Asymmetric crystal 0:No, 1:Yes.
-    asymmetry_angle : float, optional
-        For f_bragg_a=1, the asymmetry angle (angle between crystal planes and surface) in rads.
-    is_thick : int, optional
-        Use thick crystal approximation.
     thickness : float, optional
         For is_thick=0, the crystal thickness in m.
     f_central : int, optional
@@ -44,9 +38,12 @@ class S4PlaneMosaicCrystal(S4MosaicCrystal, S4PlaneOpticalElementDecorator):
         0: setting photon energy in eV, 1:setting photon wavelength in m.
     phot_cent : float, optional
         for f_central=1, the value of the photon energy (f_phot_cent=0) or photon wavelength (f_phot_cent=1).
-    f_ext : inf, optional
-        Flag for autosetting the crystal surface parameters.
-        0: internal/calculated parameters, 1:external/user defined parameters. TODO: delete?
+    mosaicity_fwhm_deg : float, optional
+        The crystal mosaicity (FWHM) in degrees.
+    mosaicity_profile_flag : int, optional
+        The distribution function of the crystallites:
+        0: Gaussian,
+        1: External.
     material_constants_library_flag : int, optional
         Flag for indicating the origin of the crystal data:
         0: xraylib, 1: dabax, 2: preprocessor file v1, 3: preprocessor file v2.
@@ -66,7 +63,6 @@ class S4PlaneMosaicCrystal(S4MosaicCrystal, S4PlaneOpticalElementDecorator):
                  miller_index_h=1,
                  miller_index_k=1,
                  miller_index_l=1,
-                 asymmetry_angle=0.0,
                  thickness=0.010,
                  f_central=0,
                  f_phot_cent=0,
@@ -77,7 +73,7 @@ class S4PlaneMosaicCrystal(S4MosaicCrystal, S4PlaneOpticalElementDecorator):
                  file_refl="",
                  dabax=None,
                  mosaicity_fwhm_deg=0.4,
-                 mosaicity_profile_flag=0,  # 0=Gaussian, 1=Lorentzian
+                 mosaicity_profile_flag=0,  # 0=Gaussian, 1=External
                  ):
         S4PlaneOpticalElementDecorator.__init__(self)
         S4MosaicCrystal.__init__(self,
@@ -88,9 +84,6 @@ class S4PlaneMosaicCrystal(S4MosaicCrystal, S4PlaneOpticalElementDecorator):
                         miller_index_h=miller_index_h,
                         miller_index_k=miller_index_k,
                         miller_index_l=miller_index_l,
-                        # f_bragg_a=False,
-                        asymmetry_angle=asymmetry_angle,
-                        # is_thick=0,          # 1=Use thick crystal approximation
                         thickness=thickness,
                         f_central=f_central,
                         f_phot_cent=f_phot_cent,
@@ -110,17 +103,12 @@ class S4PlaneMosaicCrystal(S4MosaicCrystal, S4PlaneOpticalElementDecorator):
             "miller_index_h": miller_index_h,
             "miller_index_k": miller_index_k,
             "miller_index_l": miller_index_l,
-            "asymmetry_angle": asymmetry_angle,
-            # "is_thick": is_thick,
             "thickness": thickness,
             "f_central": f_central,
             "f_phot_cent": f_phot_cent,
             "phot_cent": phot_cent,
             "file_refl": file_refl,
-            # "f_bragg_a": f_bragg_a,
-            # "f_ext": f_ext,
             "material_constants_library_flag": material_constants_library_flag,
-            # "method_efields_management": method_efields_management,
             "dabax": self._get_dabax_txt(),
             "mosaicity_fwhm_deg": mosaicity_fwhm_deg,
             "mosaicity_profile_flag": mosaicity_profile_flag,  # 0=Gaussian, 1=Lorentzian
@@ -146,7 +134,6 @@ from shadow4.beamline.optical_elements.mosaic_crystals.s4_plane_mosaic_crystal i
 optical_element = S4PlaneMosaicCrystal(name='{name}',
     boundary_shape=boundary_shape, material='{material}',
     miller_index_h={miller_index_h}, miller_index_k={miller_index_k}, miller_index_l={miller_index_l},
-    asymmetry_angle={asymmetry_angle},
     thickness={thickness},
     f_central={f_central}, f_phot_cent={f_phot_cent}, phot_cent={phot_cent},
     file_refl='{file_refl}',
@@ -161,7 +148,7 @@ optical_element = S4PlaneMosaicCrystal(name='{name}',
 
 class S4PlaneMosaicCrystalElement(S4MosaicCrystalElement):
     """
-    The Shadow4 plane crystal element.
+    The Shadow4 plane mosaic crystal element.
     It is made of a S4PlaneMosaicCrystal and an ElementCoordinates instance. It also includes the input beam.
 
     Constructor.
@@ -238,13 +225,9 @@ if __name__ == "__main__":
     optical_element = S4PlaneMosaicCrystal(name='Generic Crystal',
                                      boundary_shape=boundary_shape, material='Si',
                                      miller_index_h=1, miller_index_k=1, miller_index_l=1,
-                                     # f_bragg_a=False,
-                                     asymmetry_angle=0.0,
-                                     # is_thick=1,
                                      thickness=0.001,
                                      f_central=1, f_phot_cent=0, phot_cent=10000.0,
                                      file_refl='bragg.dat',
-                                     # f_ext=0,
                                      material_constants_library_flag=1,
                                      # 0=xraylib,1=dabax,2=preprocessor v1,3=preprocessor v2
                                      # method_efields_management=0,  # 0=new in S4; 1=like in S3
