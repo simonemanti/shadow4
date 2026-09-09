@@ -10,40 +10,30 @@ from syned.beamline.shape import Rectangle, Ellipse
 from shadow4.beam.s4_beam import S4Beam
 from shadow4.beamline.s4_beamline_element import S4BeamlineElement
 from shadow4.beamline.s4_beamline_element_movements import S4BeamlineElementMovements
-from shadow4.tools.arrayofvectors import vector_modulus, vector_dot, vector_cross, vector_norm
-from shadow4.tools.arrayofvectors import vector_multiply_scalar, vector_diff
+from shadow4.tools.arrayofvectors import vector_modulus, vector_dot, vector_cross, vector_norm, vector_rotate_around_axis, vector_reflection
+from shadow4.tools.logger import is_verbose, is_debug
 
-from crystalpy.diffraction.DiffractionSetupXraylib import DiffractionSetupXraylib
 from crystalpy.diffraction.DiffractionSetupDabax import DiffractionSetupDabax
-from crystalpy.diffraction.DiffractionSetupShadowPreprocessorV1 import DiffractionSetupShadowPreprocessorV1
-from crystalpy.diffraction.DiffractionSetupShadowPreprocessorV2 import DiffractionSetupShadowPreprocessorV2
-
 from crystalpy.diffraction.GeometryType import BraggDiffraction
-from crystalpy.util.Vector import Vector
-from crystalpy.util.ComplexAmplitudePhoton import ComplexAmplitudePhoton
-from crystalpy.diffraction.PerfectCrystalDiffraction import PerfectCrystalDiffraction
 
 from dabax.dabax_xraylib import DabaxXraylib
 
 from shadow4.optical_surfaces.s4_mesh import S4Mesh
 from shadow4.optical_surfaces.s4_toroid import S4Toroid
 
-from shadow4.tools.logger import is_verbose, is_debug
-from shadow4.tools.arrayofvectors import vector_modulus_square, vector_modulus, vector_norm, vector_rotate_around_axis, vector_cross, vector_reflection
-from shadow4.tools.logger import is_verbose, is_debug
-
 import scipy.constants as codata
+
 
 class S4MosaicCrystal(Crystal):
     """
     Shadow4 Crystal Class
-    This is a base class for perfect crystal in reflection geometry (Bragg), using the diffracted beam.
+    This is a base class for mosaic crystal in reflection geometry (Bragg), using the diffracted beam.
 
     Use derived classes for plane or other curved crystal surfaces.
 
     Use other classes for (to be developed):
         * S4TransmissionCrystal : Perfect crystal in transmission (Bragg-transmitted beam, Laue-diffracted and Laue-transmited)
-        * S4JohanssonCrystal : Johanssong curved perfect crystals (in Bragg reflection).
+        * S4JohanssonCrystal : Johanssong curved mosaic crystals (in Bragg reflection).
         * S4MosaicCrystal : Mosaic crystals (in Bragg reflection).
 
     Constructor.
@@ -97,7 +87,7 @@ class S4MosaicCrystal(Crystal):
 
     Returns
     -------
-    instance of S4Crystal.
+    instance of S4MosaicCrystal.
     """
     def __init__(self,
                  name="Undefined",
@@ -510,49 +500,46 @@ class S4MosaicCrystalElement(S4BeamlineElement):
         # reflect beam in the crystal and apply crystal reflectivity
         #
 
-        if True: # self.get_optical_element()._method_efields_management == 0: # S4
-            footprint, normal = self.get_optical_element().get_optical_surface_instance().calculate_intercept_on_beam(input_beam)
+        footprint, normal = self.get_optical_element().get_optical_surface_instance().calculate_intercept_on_beam(input_beam)
 
-            if is_debug():
-                print("    >>>>>> intercept: ", footprint.get_columns([1, 2, 3])[:, 0])
-                print("    >>>>>> vout: ", footprint.get_columns([4, 5, 6])[:, 0])
-                print("    >>>>>> normal: ", normal.shape, normal[:, 0])
+        if is_debug():
+            print("    >>>>>> intercept: ", footprint.get_columns([1, 2, 3])[:, 0])
+            print("    >>>>>> vout: ", footprint.get_columns([4, 5, 6])[:, 0])
+            print("    >>>>>> normal: ", normal.shape, normal[:, 0])
 
-            r_SS, r_PP = self._calculate_mosaic_reflectivity(footprint, normal)
-            vIn, vOut = self._calculate_mosaic_reflection(footprint, normal)
-            rIn, rOut = self._sample_mosaic_penetration(footprint, normal)
+        r_SS, r_PP = self._calculate_mosaic_reflectivity(footprint, normal)
+        vIn, vOut = self._calculate_mosaic_reflection(footprint, normal)
+        rIn, rOut = self._sample_mosaic_penetration(footprint, normal)
 
-            jv_out_0, jv_out_1, ee_S, ee_P = self._calculate_jones_and_efield_directions(footprint, normal,
-                                                                                            vIn, vOut, r_SS, r_PP)
-            # update beam array with the new position
-            footprint.set_column(1, rOut[:, 0])
-            footprint.set_column(2, rOut[:, 1])
-            footprint.set_column(3, rOut[:, 2])
-            # update beam array with the new direction
-            footprint.set_column(4, vOut[:, 0])
-            footprint.set_column(5, vOut[:, 1])
-            footprint.set_column(6, vOut[:, 2])
-            # update beam array with the new electric fields
-            footprint.set_jones_components(jv_out_0, jv_out_1, e_S=ee_S, e_P=ee_P)
+        jv_out_0, jv_out_1, ee_S, ee_P = self._calculate_jones_and_efield_directions(footprint, normal,
+                                                                                        vIn, vOut, r_SS, r_PP)
+        # update beam array with the new position
+        footprint.set_column(1, rOut[:, 0])
+        footprint.set_column(2, rOut[:, 1])
+        footprint.set_column(3, rOut[:, 2])
+        # update beam array with the new direction
+        footprint.set_column(4, vOut[:, 0])
+        footprint.set_column(5, vOut[:, 1])
+        footprint.set_column(6, vOut[:, 2])
+        # update beam array with the new electric fields
+        footprint.set_jones_components(jv_out_0, jv_out_1, e_S=ee_S, e_P=ee_P)
 
-            if is_verbose():
-                print(">>> Orthogonal footprint: ", footprint.efields_orthogonal(),
-                  vector_dot(ee_S, ee_P)[0],
-                  vector_dot(ee_S, vOut)[0],
-                  vector_dot(ee_P, vOut)[0])
+        if is_verbose():
+            print(">>> Orthogonal footprint: ", footprint.efields_orthogonal(),
+                vector_dot(ee_S, ee_P)[0],
+                vector_dot(ee_S, vOut)[0],
+                vector_dot(ee_P, vOut)[0])
 
-                b_S, b_P = footprint.get_efield_directions()
-                print("")
-                print(">>> reflected beam e_S, mod e_s", b_S[0], vector_modulus(b_S)[0])
-                print(">>> reflected beam e_P, mod e_P, e_S.e_P: ", b_P[0], vector_modulus(b_P)[0], vector_dot(b_S, b_P)[0])
+            b_S, b_P = footprint.get_efield_directions()
+            print("")
+            print(">>> reflected beam e_S, mod e_s", b_S[0], vector_modulus(b_S)[0])
+            print(">>> reflected beam e_P, mod e_P, e_S.e_P: ", b_P[0], vector_modulus(b_P)[0], vector_dot(b_S, b_P)[0])
 
 
-                print(">>> Intensity foot s, beam in s, foot p,  beam in p:",
-                      footprint.get_column(24)[0], input_beam.get_column(24)[0],
-                      footprint.get_column(25)[0], input_beam.get_column(25)[0],)
+            print(">>> Intensity foot s, beam in s, foot p,  beam in p:",
+                    footprint.get_column(24)[0], input_beam.get_column(24)[0],
+                    footprint.get_column(25)[0], input_beam.get_column(25)[0],)
 
-        else: # S3
-            footprint, normal = self._apply_crystal_diffraction_and_reflectivities_S3(input_beam)
 
         return footprint, normal
 
@@ -740,119 +727,6 @@ class S4MosaicCrystalElement(S4BeamlineElement):
         return rin, rout
                 
 
-    def _calculate_perfect_crystal_scattering(self, footprint1, normal):
-        """
-        Compute the scattering by the crystal beamline element.
-
-        It calls crystalpy to compute the crystal parameters:
-
-        - output direction vOut
-
-        - reflectivities (complex amplitudes) r__S and r_P
-
-        Parameters
-        ----------
-        footprint : S4Beam instance
-            The beam in the local reference of the beamline element with only the intercepts calculated (directions
-            and electric fields will be later updated with the results of this method).
-
-        normal : numpy array
-            The array with the normal to the surface for all rays.
-
-        Returns
-        -------
-        tuple
-            (vIn, vOut, r_S, r_P) : input and output direction with shape (npoints, 3) and complex amplitude
-            reflectivity for sigma and pi.
-
-        """
-
-        footprint = footprint1.duplicate()
-        v1 = footprint.get_columns([4, 5, 6])  # numpy.array(a3.getshcol([4,5,6]))
-
-        #
-        # direction and reflectivity calculation using crystalpy
-        #
-        energies = footprint.get_photon_energy_eV()
-
-        # incident  crystalpy photon stack
-        photons_in = ComplexAmplitudePhoton(
-            energies,
-            Vector(v1[0], v1[1], v1[2]),
-            Esigma=numpy.ones(energies.size, dtype=complex),
-            Epi   =numpy.ones(energies.size, dtype=complex),
-            )
-
-        # create crystalpy PerfectCrystalDiffraction instance
-        # Warning:
-        # S4Conic, S4Toroid give normal_z < 0 for concave surfaces (and >0 for convex)
-        # S4mesh give always normal_z > 0
-        # We need for crystalpy the upwards normal
-        soe = self.get_optical_element()
-        ccc = soe.get_optical_surface_instance()
-
-        if isinstance(ccc, S4Mesh):
-            surface_normal = Vector(normal[0], normal[1], normal[2])  # normal is outwards!
-        elif isinstance(ccc, S4Toroid):
-            if ccc.f_torus == 0 or ccc.f_torus == 2:
-                surface_normal = Vector(normal[0], normal[1], normal[2]).scalarMultiplication(-1.0) # normal is inwards!
-            else:
-                surface_normal = Vector(normal[0], normal[1], normal[2])  # normal is outwards!
-        else: # todo: check with convex surfaces
-            surface_normal = Vector(normal[0], normal[1], normal[2]).scalarMultiplication(-1.0)  # normal is inwards!
-
-        # calculate vector H
-        # Geometrical convention from M.Sanchez del Rio et al., J.Appl.Cryst.(2015). 48, 477-491.
-        bragg_normal = surface_normal.getVectorH(
-            surface_normal,
-            self._crystalpy_diffraction_setup.dSpacingSI(),
-            asymmetry_angle=self._crystalpy_diffraction_setup.asymmetryAngle(),
-            azimuthal_angle=self._crystalpy_diffraction_setup.azimuthalAngle())
-
-        # g_modulus = 2.0 * numpy.pi / (self._crystalpy_diffraction_setup.dSpacingSI())
-        # # Let's start from a vector parallel to the surface normal (z axis).
-        # temp_normal_bragg = surface_normal.scalarMultiplication(g_modulus)
-        #
-        # # Let's now rotate this vector of an angle alphaX around the y axis (according to the right-hand-rule).
-        # alpha_x = self._crystalpy_diffraction_setup.asymmetryAngle()
-        # axis = self._crystalpy_diffraction_setup.vectorParallelSurface().crossProduct(
-        #     surface_normal)  # should be ~(1, 0, 0)
-        # temp_normal_bragg = temp_normal_bragg.rotateAroundAxis(axis, -alpha_x)
-        #
-        # # Let's now rotate this vector of an angle phi around the z axis (following the ISO standard 80000-2:2009).
-        # phi = self._crystalpy_diffraction_setup.azimuthalAngle()
-        # bragg_normal = temp_normal_bragg.rotateAroundAxis(temp_normal_bragg, phi)
-
-        perfect_crystal = PerfectCrystalDiffraction.initializeFromDiffractionSetupAndEnergy(
-            self._crystalpy_diffraction_setup,
-            energies,
-            geometry_type=None,
-            bragg_normal=bragg_normal,
-            surface_normal=surface_normal,
-            thickness=None,
-            d_spacing=None,
-        )
-
-        # Calculate outgoing Photon.
-
-        # NEW USING Jones matrix JR
-        outgoing_complex_amplitude_photon = perfect_crystal.calculatePhotonOut(photons_in,
-                                                                                apply_reflectivity=True,
-                                                                                calculation_method=1,
-                                                                                is_thick=1,
-                                                                                use_transfer_matrix=0
-                                                                                )
-        r_S = outgoing_complex_amplitude_photon.getComplexAmplitudeS()
-        r_P = outgoing_complex_amplitude_photon.getComplexAmplitudeP()
-
-        if is_verbose():
-            print(">> r_S: ", r_S[0], numpy.abs(r_S[0]) ** 2)
-            print(">> r_P: ", r_P[0], numpy.abs(r_P[0]) ** 2)
-        vv = outgoing_complex_amplitude_photon.unitDirectionVector().components()  # (3, npoints)
-        vOut = vv.T  # shape (npoints, 3)
-        vIn = v1.T
-        return vIn, vOut, r_S, r_P
-
     def _calculate_jones_and_efield_directions(self, footprint, normal, vIn, vOut, r_SS, r_PP):
         """
         Calculates the Jones vector after crystal diffraction. It also returns the directions of the
@@ -955,306 +829,6 @@ class S4MosaicCrystalElement(S4BeamlineElement):
 
         return jv_out_0, jv_out_1, ee_S, ee_P
 
-    def _apply_crystal_diffraction_and_reflectivities_S3(self, beam): #TODO delete
-        """
-        Applies the changes in direction and in reflectivity in a beam due to crystal diffraction.
-        It mimics the procedure in SHADOW3.
-        Note that it is a new way in SHADOW4 using Jones algebra.
-
-        Parameters
-        ----------
-        beam : instance of S4Beam
-            the beam (already transformed to the local crystal reference system).
-
-        Returns
-        -------
-        tuple
-            (footprint, normal), with footprint an instance of S4Beam and the vector normal as numpy arrat (3,:)
-
-        """
-        #
-        soe = self.get_optical_element()
-        ccc = soe.get_optical_surface_instance()
-        v1 = beam.get_columns([4, 5, 6])
-
-        # intercept calculation
-        footprint, normal = ccc.calculate_intercept_on_beam(beam)
-
-
-        #
-        # direction and reflectivity calculation using crystalpy
-        #
-        energies = footprint.get_photon_energy_eV()
-
-        # incident  crystalpy photon stack
-        photons_in = ComplexAmplitudePhoton(
-            energies,
-            Vector(v1[0], v1[1], v1[2]),
-            Esigma=numpy.ones(energies.size, dtype=complex), #numpy.sqrt(footprint.get_column(24)) * numpy.exp(1j * footprint.get_column(14)),
-            Epi   =numpy.ones(energies.size, dtype=complex), #numpy.sqrt(footprint.get_column(25)) * numpy.exp(1j * footprint.get_column(15)),
-            )
-
-        # create crystalpy PerfectCrystalDiffraction instance
-        # Warning:
-        # S4Conic, S4Toroid give normal_z < 0 for concave surfaces (and >0 for convex)
-        # S4mesh give always normal_z > 0
-        # We need for crystalpy the upwards normal
-        if isinstance(ccc, S4Mesh):
-            surface_normal = Vector(normal[0], normal[1], normal[2])  # normal is outwards!
-        elif isinstance(ccc, S4Toroid):
-            if ccc.f_torus == 0 or ccc.f_torus == 2:
-                surface_normal = Vector(normal[0], normal[1], normal[2]).scalarMultiplication(-1.0) # normal is inwards!
-            else:
-                surface_normal = Vector(normal[0], normal[1], normal[2])  # normal is outwards!
-        else: # todo: check with convex surfaces
-            surface_normal = Vector(normal[0], normal[1], normal[2]).scalarMultiplication(-1.0)  # normal is inwards!
-
-        # calculate vector H
-        # Geometrical convention from M.Sanchez del Rio et al., J.Appl.Cryst.(2015). 48, 477-491.
-        bragg_normal = surface_normal.getVectorH(
-            surface_normal,
-            self._crystalpy_diffraction_setup.dSpacingSI(),
-            asymmetry_angle=self._crystalpy_diffraction_setup.asymmetryAngle(),
-            azimuthal_angle=self._crystalpy_diffraction_setup.azimuthalAngle())
-
-        # g_modulus = 2.0 * numpy.pi / (self._crystalpy_diffraction_setup.dSpacingSI())
-        # # Let's start from a vector parallel to the surface normal (z axis).
-        # temp_normal_bragg = surface_normal.scalarMultiplication(g_modulus)
-        #
-        # # Let's now rotate this vector of an angle alphaX around the y axis (according to the right-hand-rule).
-        # alpha_x = self._crystalpy_diffraction_setup.asymmetryAngle()
-        # axis = self._crystalpy_diffraction_setup.vectorParallelSurface().crossProduct(
-        #     surface_normal)  # should be ~(1, 0, 0)
-        # temp_normal_bragg = temp_normal_bragg.rotateAroundAxis(axis, -alpha_x)
-        #
-        # # Let's now rotate this vector of an angle phi around the z axis (following the ISO standard 80000-2:2009).
-        # phi = self._crystalpy_diffraction_setup.azimuthalAngle()
-        # bragg_normal = temp_normal_bragg.rotateAroundAxis(temp_normal_bragg, phi)
-
-        perfect_crystal = PerfectCrystalDiffraction.initializeFromDiffractionSetupAndEnergy(
-            self._crystalpy_diffraction_setup,
-            energies,
-            geometry_type=None,
-            bragg_normal=bragg_normal,
-            surface_normal=surface_normal,
-            # bragg_angle=None,
-            # psi_0=None,
-            # psi_H=None,
-            # psi_H_bar=None,
-            thickness=None,
-            d_spacing=None,
-        )
-
-        # Calculate outgoing Photon.
-
-        if is_verbose(): print(">> method_efields_management=1: traditional S3")
-        outgoing_complex_amplitude_photon = perfect_crystal.calculatePhotonOut(photons_in,
-                                                                                apply_reflectivity=True,
-                                                                                calculation_method=1,
-                                                                                is_thick=soe._is_thick,
-                                                                                use_transfer_matrix=0
-                                                                                )
-
-
-        # copy data to vectors
-        E_S = footprint.get_columns([7,8,9]).T
-        E_P = footprint.get_columns([16, 17, 18]).T
-        PhiS = footprint.get_column(14)
-        PhiP = footprint.get_column(15)
-        vNormal = normal.T
-        vIn = v1.T
-        vH = vNormal # todo: set for asymmetry!!!
-
-        if is_verbose():
-            print(">>>>> incident E_S, norm: ", E_S[0], vector_modulus(E_S)[0])
-            print(">>>>> incident E_P, norm: ", E_P[0], vector_modulus(E_P)[0])
-
-        #
-        # STEP 1: get local sigma and pi directions v_S and v_P (uS and uP unitary vectors)
-        #
-
-        uS, uP = footprint.get_local_directions_sigma_pi(vH, vIn=vIn)
-
-        #
-        # calculate the electric field in the local coordinate system
-        #
-
-        # CALL	DOT	(AS_VEC,AS_TEMP,A11)	! matrix element of rotation
-        # CALL	DOT	(AP_VEC,AS_TEMP,A12)	! matrix element of rotation
-        # CALL	DOT	(AS_VEC,AP_TEMP,A21)	! matrix element of rotation
-        # CALL	DOT	(AP_VEC,AP_TEMP,A22)	! matrix element of rotation
-        # ! ** Now recompute the ampltitude and phase of the local S- and P- component.
-        # AS_NEW	= SQRT(ABS(A11**2 + A12**2 +  &
-        #         2.0D0*A11*A12*COS(PHS-PHP)))
-        # AP_NEW	= SQRT(ABS(A21**2 + A22**2 +  &
-        #         2.0D0*A21*A22*COS(PHS-PHP)))
-        # CALL	SCALAR	(AS_TEMP,AS_NEW,AS_VEC)	! Local As vector
-        # CALL	SCALAR	(AP_TEMP,AP_NEW,AP_VEC)	! Local Ap vector
-        # PHTS	= A11*SIN(PHS) + A12*SIN(PHP)
-        # PHBS	= A11*COS(PHS) + A12*COS(PHP)
-        # PHTP	= A21*SIN(PHS) + A22*SIN(PHP)
-        # PHBP	= A21*COS(PHS) + A22*COS(PHP)
-        # CALL	ATAN_2	(PHTS,PHBS,PHS)		! Phase of local As vector
-        # CALL	ATAN_2	(PHTP,PHBP,PHP)		! Phase of local Ap vector
-        # ! C
-        # ! C
-        # CALL	DOT	(VVIN,VNOR,SIN_VAL)	! sin(graz. ang)
-        # CALL	DOT	(Q_OUT,VNOR,SIN_REF)	! sin(graz.ref.ang)
-
-        a11 = vector_dot(E_S, uS)
-        a12 = vector_dot(E_P, uS)
-        a21 = vector_dot(E_S, uP)
-        a22 = vector_dot(E_P, uP)
-
-        if is_verbose():
-            print(">>>>    Matrix a11: ", a11[0])
-            print(">>>>    Matrix a12: ", a12[0])
-            print(">>>>    Matrix a21: ", a21[0])
-            print(">>>>    Matrix a22: ", a22[0])
-
-        M2_S = a11 ** 2 + a12 ** 2 + 2 * a11 * a12 * numpy.cos(PhiS - PhiP)
-        M2_P = a21 ** 2 + a22 ** 2 + 2 * a21 * a22 * numpy.cos(PhiS - PhiP)
-
-        E_local_S = vector_multiply_scalar(uS, numpy.sqrt(M2_S))
-        E_local_P = vector_multiply_scalar(uP, numpy.sqrt(M2_P))
-
-
-        if is_verbose():
-            print(">>>>> E_local_S, norm: ", E_local_S[0], vector_modulus(E_local_S)[0])
-            print(">>>>> E_local_P, norm: ", E_local_P[0], vector_modulus(E_local_P)[0])
-
-        local_PhiS = numpy.arctan2((a11 * numpy.sin(PhiS) + a12 * numpy.sin(PhiP)) , (a11 * numpy.cos(PhiS) + a12 * numpy.cos(PhiP)))
-        local_PhiP = numpy.arctan2((a21 * numpy.sin(PhiS) + a22 * numpy.sin(PhiP)) , (a21 * numpy.cos(PhiS) + a22 * numpy.cos(PhiP)))
-        # END OF STEP 1
-
-        #
-        # STEP 2: now apply crystal reflectivity
-        #
-        crystal_reflectivity_S = numpy.sqrt(outgoing_complex_amplitude_photon.getIntensityS())
-        crystal_reflectivity_P = numpy.sqrt(outgoing_complex_amplitude_photon.getIntensityP())
-        crystal_phase_S = outgoing_complex_amplitude_photon.getPhaseS()
-        crystal_phase_P = outgoing_complex_amplitude_photon.getPhaseP()
-
-        if is_verbose():
-            print(">>>> crystal_reflectivity_S: ", crystal_reflectivity_S[0])
-            print(">>>> crystal_reflectivity_P: ", crystal_reflectivity_P[0])
-
-
-        E_diffracted_S = numpy.zeros_like(E_local_S)
-        E_diffracted_P = numpy.zeros_like(E_local_S)
-
-        E_diffracted_S[:, 0] = E_local_S[:, 0] * crystal_reflectivity_S
-        E_diffracted_S[:, 1] = E_local_S[:, 1] * crystal_reflectivity_S
-        E_diffracted_S[:, 2] = E_local_S[:, 2] * crystal_reflectivity_S
-
-        E_diffracted_P[:, 0] = E_local_P[:, 0] * crystal_reflectivity_P
-        E_diffracted_P[:, 1] = E_local_P[:, 1] * crystal_reflectivity_P
-        E_diffracted_P[:, 2] = E_local_P[:, 2] * crystal_reflectivity_P
-
-        Phi_diffracted_S = local_PhiS + crystal_phase_S
-        Phi_diffracted_P = local_PhiP + crystal_phase_P
-
-        #
-        # update footprint with the new values (direction and phases)
-        # (electric vector are not updated as they will change in STEP 3)
-        #
-
-        footprint.set_column(14, Phi_diffracted_S)
-        footprint.set_column(15, Phi_diffracted_P)
-
-        # print("orthogonal INCIDENT: ", footprint.efields_orthogonal(verbose=1))
-
-        vv = outgoing_complex_amplitude_photon.unitDirectionVector().components() # (3, npoints)
-        footprint.set_column(4, vv[0])
-        footprint.set_column(5, vv[1])
-        footprint.set_column(6, vv[2])
-
-        # print("orthogonal BEFORE: ", footprint.efields_orthogonal(verbose=1))
-
-        vOut = vv.T # (npoints, 3)
-
-        #
-        # STEP 3
-        #
-
-        # ! Electric vectors are changed to assure orthogonality with the new direction VVOUT
-        # ! To conserve intensity, the moduli of Es and Ep must not change
-        # ! AS_VEC and VVOUT are not orthogonal so a projection of S and P coordinates into the
-        # ! new ones do not work as it may be a component of the electric field along VVOUT
-        #
-        # CALL CROSS_M_FLAG  (VVOUT,VNOR,AS_TEMP,M_FLAG) ! vector pp. to inc.pl.
-        # CALL DOT (AS_VEC,AS_VEC,AS2)
-        # CALL DOT (AP_VEC,AP_VEC,AP2)
-        #
-        # IF (M_FLAG.EQ.1) THEN
-        #  IF (AS2.NE.0) THEN
-        #    DO I=1,3
-        #      AS_TEMP(I) = AS_VEC(I)
-        #    END DO
-        #  ELSE
-        #   DO I=1,3
-        #    AS_TEMP(I) = AP_VEC(I)
-        #   END DO
-        #  END IF
-        # END IF
-        #
-        # CALL NORM   (AS_TEMP,AS_TEMP) ! Local unit As vector perp to vvout
-        # CALL CROSS (AS_TEMP,VVOUT,AP_TEMP)
-        # CALL NORM (AP_TEMP,AP_TEMP) ! Local unit Ap vector perp to vvout
-        #
-        # do i=1,3
-        #   as_vec(i) = as_temp(i) * sqrt(as2)
-        #   ap_vec(i) = ap_temp(i) * sqrt(ap2)
-        # end do
-
-        aS = vector_modulus(E_diffracted_S)
-        aP = vector_modulus(E_diffracted_P)
-
-        if is_verbose():
-            print(">>>  Modulus of initial E vectors s, p",   vector_modulus(E_S)[0], vector_modulus(E_P)[0])
-            print(">>>  Modulus of diffracted E vectors s, p", aS[0], aP[0])
-
-        v_S = vector_cross(vOut, vH) # AS_TEMP
-        v_Smod = vector_modulus(v_S)
-        mask = (v_Smod == 0.0)
-        if mask.any():
-            print(">>>>>> FOUND A ZERO!!!!!")
-            if v_Smod.sum() > 0:
-                v_S[mask, 0] = E_diffracted_S[mask, 0]
-                v_S[mask, 1] = E_diffracted_S[mask, 1]
-                v_S[mask, 2] = E_diffracted_S[mask, 2]
-            else:
-                v_S[mask, 0] = E_diffracted_P[mask, 0]
-                v_S[mask, 1] = E_diffracted_P[mask, 1]
-                v_S[mask, 2] = E_diffracted_P[mask, 2]
-
-        v_P = vector_cross(v_S, vOut) # AP_TEMP
-
-        uS = vector_norm(v_S)
-        uP = vector_norm(v_P)
-
-        E_diffracted_S[:, 0] = uS[:, 0] * aS
-        E_diffracted_S[:, 1] = uS[:, 1] * aS
-        E_diffracted_S[:, 2] = uS[:, 2] * aS
-
-        E_diffracted_P[:, 0] = uP[:, 0] * aP
-        E_diffracted_P[:, 1] = uP[:, 1] * aP
-        E_diffracted_P[:, 2] = uP[:, 2] * aP
-
-        # END STEP 3
-
-        #
-        # replace electric fields and phases in footprint.
-        # Note that reflectivity_S affects the X components, and reflectivity_P the Z ones.
-        #
-        footprint.set_column(7, E_diffracted_S[:, 0])
-        footprint.set_column(8, E_diffracted_S[:, 1])
-        footprint.set_column(9, E_diffracted_S[:, 2])
-        footprint.set_column(16, E_diffracted_P[:, 0])
-        footprint.set_column(17, E_diffracted_P[:, 1])
-        footprint.set_column(18, E_diffracted_P[:, 2])
-
-        return footprint, normal
 
 if __name__ == "__main__":
     c = S4MosaicCrystal(
