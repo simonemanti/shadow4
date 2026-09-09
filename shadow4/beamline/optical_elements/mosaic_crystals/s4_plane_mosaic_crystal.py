@@ -5,7 +5,7 @@ import numpy
 from syned.beamline.element_coordinates import ElementCoordinates
 
 from shadow4.beam.s4_beam import S4Beam
-from shadow4.beamline.optical_elements.mosaiccrystals.s4_mosaiccrystal import S4MosaicCrystalElement, S4MosaicCrystal
+from shadow4.beamline.optical_elements.mosaic_crystals.s4_mosaic_crystal import S4MosaicCrystalElement, S4MosaicCrystal
 from shadow4.beamline.s4_optical_element_decorators import S4PlaneOpticalElementDecorator
 from shadow4.beamline.s4_beamline_element_movements import S4BeamlineElementMovements
 
@@ -144,7 +144,7 @@ class S4PlaneMosaicCrystal(S4MosaicCrystal, S4PlaneOpticalElementDecorator):
         txt = self.to_python_code_boundary_shape()
         txt_pre = """
 
-from shadow4.beamline.optical_elements.mosaiccrystals.s4_plane_mosaiccrystal import S4PlaneMosaicCrystal
+from shadow4.beamline.optical_elements.mosaic_crystals.s4_plane_mosaic_crystal import S4PlaneMosaicCrystal
 optical_element = S4PlaneMosaicCrystal(name='{name}',
     boundary_shape=boundary_shape, material='{material}',
     miller_index_h={miller_index_h}, miller_index_k={miller_index_k}, miller_index_l={miller_index_l},
@@ -207,7 +207,7 @@ class S4PlaneMosaicCrystalElement(S4MosaicCrystalElement):
         txt += self.get_optical_element().to_python_code()
         txt += self.to_python_code_coordinates()
         txt += self.to_python_code_movements()
-        txt += "\nfrom shadow4.beamline.optical_elements.mosaiccrystals.s4_plane_mosaiccrystal import S4PlaneMosaicCrystalElement"
+        txt += "\nfrom shadow4.beamline.optical_elements.mosaic_crystals.s4_plane_mosaic_crystal import S4PlaneMosaicCrystalElement"
         txt += "\nbeamline_element = S4PlaneMosaicCrystalElement(optical_element=optical_element,coordinates=coordinates, movements=movements, input_beam=beam)"
         txt += "\n\nbeam, footprint = beamline_element.trace_beam()"
         return txt
