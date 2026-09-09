@@ -495,10 +495,25 @@ class S4MosaicCrystalElement(S4BeamlineElement):
         return output_beam, footprint
 
     def _apply_crystal_diffraction(self, input_beam):
-        #
-        # geometric and physics for the scattering process:
-        # reflect beam in the crystal and apply crystal reflectivity
-        #
+        """
+        Applies mosaic crystal diffraction to the input beam.
+
+        Calculates the surface intercepts, mosaic reflectivity, outgoing directions,
+        and internal diffraction positions. Updates the beam positions, directions,
+        Jones components, and electric field directions.
+
+        Parameters
+        ----------
+        input_beam : instance of S4Beam
+            The incident beam in the optical element reference system.
+
+        Returns
+        -------
+        tuple
+            (footprint, normal), where footprint is the updated S4Beam and normal
+            is a numpy array of shape (3, nrays) containing the surface normals
+            at the intercept points.
+        """
 
         footprint, normal = self.get_optical_element().get_optical_surface_instance().calculate_intercept_on_beam(input_beam)
 
@@ -544,11 +559,37 @@ class S4MosaicCrystalElement(S4BeamlineElement):
         return footprint, normal
 
     def _calculate_mosaic_reflectivity(self, footprint, normal):
-        """Return sigma/pi amplitude factors for a symmetric mosaic crystal.
+        """
+        Calculates the amplitude reflectivity for a symmetric mosaic crystal.
 
-        Uses a Gaussian orientation profile and the finite-thickness
-        reflectivity of the 1992 model, with the corrected Q coefficients.
-        No mosaic orientation or penetration sampling is performed.
+        Uses a Gaussian crystallite orientation profile and the finite-thickness
+        reflectivity of the 1992 model, with corrected Q coefficients.
+        No orientation or penetration sampling is performed. The footprint is
+        not modified.
+
+        Parameters
+        ----------
+        footprint : instance of S4Beam
+            The incident beam at the surface intercepts, in the optical element
+            reference system.
+        normal : numpy array shape (3, nrays)
+            The surface normals at the intercept points.
+
+        Returns
+        -------
+        tuple
+            (r_SS, r_PP), two complex numpy arrays of shape (nrays,) containing
+            the amplitude factors for the S and P polarizations. Their squared
+            moduli give the corresponding intensity reflectivities.
+
+        Raises
+        ------
+        NotImplementedError
+            If the crystal cut is asymmetric.
+        ValueError
+            If the thickness is not finite and non-negative, the Gaussian
+            mosaicity FWHM is not finite and positive, or the absorption
+            coefficients are not finite and non-negative.
         """
         if self._crystalpy_diffraction_setup is None:
             self.set_crystalpy_diffraction_setup()
@@ -606,7 +647,38 @@ class S4MosaicCrystalElement(S4BeamlineElement):
         return amplitude(Q_s), amplitude(Q_p)
 
     def _calculate_mosaic_reflection(self, footprint, normal):
+        """
+        Samples the outgoing directions for a symmetric mosaic crystal.
 
+        Rotates the surface normal to satisfy the Bragg condition, then samples
+        an additional rotation around the incident direction using the Gaussian
+        approximation of the 2013 model. Calculates the outgoing directions by
+        reflection about the sampled crystallite normals. The footprint is
+        not modified.
+
+        Parameters
+        ----------
+        footprint : instance of S4Beam
+            The incident beam at the surface intercepts, in the optical element
+            reference system.
+        normal : numpy array shape (3, nrays)
+            The surface normals at the intercept points.
+
+        Returns
+        -------
+        tuple
+            (vIn, vOut), two numpy arrays of shape (nrays, 3) containing the
+            incident and sampled outgoing unit directions.
+
+        Raises
+        ------
+        NotImplementedError
+            If the crystal cut is asymmetric.
+        ValueError
+            If the thickness is not finite and non-negative, the Gaussian
+            mosaicity FWHM is not finite and positive, or the beta sampling
+            coefficient s1 is not finite and positive.
+        """
         if self._crystalpy_diffraction_setup is None:
             self.set_crystalpy_diffraction_setup()
             
@@ -669,7 +741,38 @@ class S4MosaicCrystalElement(S4BeamlineElement):
         return vIn, vOut
 
     def _sample_mosaic_penetration(self, footprint, normal):
+        """
+        Samples the internal diffraction positions for a symmetric mosaic crystal.
 
+        Samples the distance along each incident ray from a truncated exponential
+        distribution, limited by the crystal thickness. Uses the Gaussian
+        orientation profile and the S-polarization scattering coefficient.
+        The footprint is not modified.
+
+        Parameters
+        ----------
+        footprint : instance of S4Beam
+            The incident beam at the surface intercepts, in the optical element
+            reference system.
+        normal : numpy array shape (3, nrays)
+            The surface normals at the intercept points.
+
+        Returns
+        -------
+        tuple
+            (rin, rout), two numpy arrays of shape (nrays, 3) containing the
+            surface entry positions and sampled internal diffraction positions
+            in meters. Both are expressed in the optical element reference
+            system.
+
+        Raises
+        ------
+        NotImplementedError
+            If the crystal cut is asymmetric.
+        ValueError
+            If the thickness is not finite and non-negative or the Gaussian
+            mosaicity FWHM is not finite and positive.
+        """
         if self._crystalpy_diffraction_setup is None:
             self.set_crystalpy_diffraction_setup()
             
