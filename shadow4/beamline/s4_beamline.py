@@ -15,6 +15,7 @@ import numpy
 from shadow4.beamline.optical_elements.ideal_elements.s4_empty import S4Empty
 from shadow4.beamline.optical_elements.mirrors.s4_mirror import S4Mirror
 from shadow4.beamline.optical_elements.crystals.s4_crystal import S4Crystal
+from shadow4.beamline.optical_elements.mosaic_crystals.s4_mosaic_crystal import S4MosaicCrystal
 from shadow4.beamline.optical_elements.gratings.s4_grating import S4Grating
 from shadow4.beamline.optical_elements.multilayers.s4_multilayer import S4Multilayer
 from shadow4.beamline.optical_elements.refractors.s4_lens import S4Lens
@@ -493,16 +494,42 @@ class S4Beamline(Beamline):
                 txt += top_txt2
                 txt += self._get_info_coordinates(i)
                 txt += element.get_optical_element().get_info()
+                txt += self._get_mosaic_crystal_info(element.get_optical_element())
                 txt += bottom_txt
         else:
             txt = ""
             txt += top_txt1
             txt += "O.E. %d (%s)" % (oe_index + 1, self.get_beamline_element_at(oe_index).get_optical_element().get_name())
             txt += top_txt2
-            txt += self._get_info_coordinates(i)
+            txt += self._get_info_coordinates(oe_index)
             txt += self.get_beamline_element_at(oe_index).get_optical_element().get_info()
+            txt += self._get_mosaic_crystal_info(self.get_beamline_element_at(oe_index).get_optical_element())
             txt += bottom_txt
 
+        return txt
+
+    @staticmethod
+    def _get_mosaic_crystal_info(oe):
+        """
+        Returns additional information specific to mosaic crystals, to be
+        appended to the generic optical element info in oeinfo().
+
+        Parameters
+        ----------
+        oe : instance of OpticalElement
+            The optical element (only S4MosaicCrystal instances produce text).
+
+        Returns
+        -------
+        str
+        """
+        if not isinstance(oe, S4MosaicCrystal):
+            return ""
+
+        txt = "\nMOSAIC CRYSTAL PARAMETERS\n"
+        txt += "    Thickness:              %f m\n" % oe._thickness
+        txt += "    Mosaicity FWHM:         %f deg\n" % oe._mosaicity_fwhm_deg
+        txt += "    Mosaicity profile flag: %d (0=Gaussian, 1=External)\n" % oe._mosaicity_profile_flag
         return txt
 
 
@@ -765,6 +792,8 @@ class S4Beamline(Beamline):
                 TEXT = "MIRROR"
             elif isinstance(oe, S4Crystal):
                 TEXT = "CRYSTAL"
+            elif isinstance(oe, S4MosaicCrystal):
+                TEXT = "MOSAIC CRYSTAL"
             elif isinstance(oe, S4Grating):
                 TEXT = "GRATING"
             elif isinstance(oe, S4Multilayer):
@@ -856,6 +885,8 @@ class S4Beamline(Beamline):
                 is_focusing = 1
             elif isinstance(oe, S4Crystal):
                 oetype = "CRYSTAL"
+            elif isinstance(oe, S4MosaicCrystal):
+                oetype = "MOSAIC CRYSTAL"
             elif isinstance(oe, S4Grating):
                 oetype = "GRATING"
             elif isinstance(oe, S4Multilayer):

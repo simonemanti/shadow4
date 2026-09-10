@@ -50,7 +50,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "shadow4"
-version = "0.1.91"
+version = "0.1.92"
 description = "shadow implementation in python"
 readme = "README.rst"
 license = "MIT"
@@ -97,6 +97,7 @@ packages = [
     "shadow4.beamline.optical_elements.gratings",
     "shadow4.beamline.optical_elements.refractors",
     "shadow4.beamline.optical_elements.compound",
+    "shadow4.beamline.optical_elements.mosaic_crystals",
     "shadow4.tools",
 ]
 
