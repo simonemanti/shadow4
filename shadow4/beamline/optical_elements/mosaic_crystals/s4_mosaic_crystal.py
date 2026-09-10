@@ -510,7 +510,7 @@ class S4MosaicCrystalElement(S4BeamlineElement):
 
         r_SS, r_PP = self._calculate_mosaic_reflectivity(footprint, normal)
         vIn, vOut = self._calculate_mosaic_reflection(footprint, normal)
-        rIn, rOut = self._sample_mosaic_penetration(footprint, normal)
+        rIn, rOut, path_in = self._sample_mosaic_penetration(footprint, normal)
 
         jv_out_0, jv_out_1, ee_S, ee_P = self._calculate_jones_and_efield_directions(footprint, normal,
                                                                                         vIn, vOut, r_SS, r_PP)
@@ -524,6 +524,13 @@ class S4MosaicCrystalElement(S4BeamlineElement):
         footprint.set_column(6, vOut[:, 2])
         # update beam array with the new electric fields
         footprint.set_jones_components(jv_out_0, jv_out_1, e_S=ee_S, e_P=ee_P)
+        # update optical path
+        # note that
+        # 1) we add here the path going down into the crystal. The (x,y,z) for the outgoing ray
+        #    will be inside the crystal, so the outgoing path will be implemented.
+        # 2) we are adding the path not the optical path as we are not considering the refraction index with
+        #    the crystal. This is an approximation!
+        footprint.set_column(13, footprint.get_column(13) + path_in)
 
         if is_verbose():
             print(">>> Orthogonal footprint: ", footprint.efields_orthogonal(),
@@ -724,7 +731,7 @@ class S4MosaicCrystalElement(S4BeamlineElement):
 
         Samples the distance along each incident ray from a truncated exponential
         distribution, limited by the crystal thickness. Uses the Gaussian
-        orientation profile and the S-polarization scattering coefficient.
+        orientation profile and the intensity-weighted S/P scattering coefficient.
         The footprint is not modified.
 
         Parameters
@@ -738,10 +745,12 @@ class S4MosaicCrystalElement(S4BeamlineElement):
         Returns
         -------
         tuple
-            (rin, rout), two numpy arrays of shape (nrays, 3) containing the
-            surface entry positions and sampled internal diffraction positions
-            in meters. Both are expressed in the optical element reference
-            system.
+            (rin, rout, path_in). rin and rout are numpy arrays of shape
+            (nrays, 3) containing the surface entry positions and sampled
+            internal diffraction positions in meters, both expressed in the
+            optical element reference system. path_in is a numpy array of
+            shape (nrays,) with the sampled path length (in meters) travelled
+            inside the crystal from rin to rout.
 
         Raises
         ------
@@ -770,13 +779,23 @@ class S4MosaicCrystalElement(S4BeamlineElement):
         # Only s polarization for now!
         Q_s = (numpy.pi**2 * numpy.abs(setup.psiH(energies) * setup.psiH_bar(energies))
                / (lambda_cm * numpy.sin(2 * theta_bragg)))
+        Q_p = Q_s * numpy.cos(2 * theta_bragg) ** 2
 
         kappa = numpy.radians(soe._mosaicity_fwhm_deg) / numpy.sqrt(8 * numpy.log(2))
         if not numpy.isfinite(kappa) or kappa <= 0:
             raise ValueError("Gaussian mosaicity FWHM must be finite and positive.")
         w = numpy.exp(-0.5 * (theta_diff / kappa)**2) / (kappa * numpy.sqrt(2 * numpy.pi))
 
-        eta_cm = w * Q_s
+
+        Itot = footprint.get_column(23)
+        Is = footprint.get_column(24)
+        Ip = footprint.get_column(25)
+
+        # Itot = Is + Ip exactly but can be zero for degenerate zero-amplitude rays.
+        # Guard the division so a single such ray does not raise below.
+        eta_cm = w * Q_s # start with sigma polarization
+        numpy.divide(w * (Q_s * Is + Q_p * Ip), Itot, out=eta_cm, where=Itot > 0) # if Itot>0 use average instead
+
         if numpy.any(~numpy.isfinite(eta_cm)) or numpy.any(eta_cm < 0):
             raise ValueError("Scattering coefficients must be finite and non-negative.")
 
@@ -810,7 +829,7 @@ class S4MosaicCrystalElement(S4BeamlineElement):
         # Internal diffraction positions in meters
         rout = rin + (s_cm / 100.0)[:, None] * vIn
 
-        return rin, rout
+        return rin, rout, s_cm / 100.0
                 
 
     def _calculate_jones_and_efield_directions(self, footprint, normal, vIn, vOut, r_SS, r_PP):
