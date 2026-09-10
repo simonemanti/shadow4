@@ -13,7 +13,10 @@ from shadow4.beamline.s4_beamline_element_movements import S4BeamlineElementMove
 from shadow4.tools.arrayofvectors import vector_modulus, vector_dot, vector_cross, vector_norm, vector_rotate_around_axis, vector_reflection
 from shadow4.tools.logger import is_verbose, is_debug
 
+from crystalpy.diffraction.DiffractionSetupXraylib import DiffractionSetupXraylib
 from crystalpy.diffraction.DiffractionSetupDabax import DiffractionSetupDabax
+from crystalpy.diffraction.DiffractionSetupShadowPreprocessorV1 import DiffractionSetupShadowPreprocessorV1
+from crystalpy.diffraction.DiffractionSetupShadowPreprocessorV2 import DiffractionSetupShadowPreprocessorV2
 from crystalpy.diffraction.GeometryType import BraggDiffraction
 
 from dabax.dabax_xraylib import DabaxXraylib
@@ -118,6 +121,9 @@ class S4MosaicCrystal(Crystal):
         self._file_refl = file_refl
 
         self._dabax = dabax
+
+        if mosaicity_profile_flag != 0:
+            raise NotImplementedError("Only the Gaussian mosaicity profile (mosaicity_profile_flag=0) is implemented.")
 
         # support text containg name of variable, help text and unit. Will be stored in self._support_dictionary
         self._mosaicity_fwhm_deg = mosaicity_fwhm_deg
@@ -271,17 +277,54 @@ class S4MosaicCrystalElement(S4BeamlineElement):
         instance of crystalpy DiffractionSetupAbstract
         """
         oe = self.get_optical_element()
-        
-        self._crystalpy_diffraction_setup = DiffractionSetupDabax(
-            geometry_type=BraggDiffraction(),
-            crystal_name=oe._material,
-            thickness=oe._thickness,  # metri
-            miller_h=oe._miller_index_h,
-            miller_k=oe._miller_index_k,
-            miller_l=oe._miller_index_l,
-            azimuthal_angle=0.0,
-            dabax=oe._dabax,
-        )
+
+        if oe._material_constants_library_flag == 0:
+            if is_verbose(): print("\nCreating a diffraction setup (XRAYLIB) for material:", oe._material)
+            diffraction_setup = DiffractionSetupXraylib(geometry_type=BraggDiffraction(),
+                                                 crystal_name=oe._material,  # string
+                                                 thickness=oe._thickness,  # meters
+                                                 miller_h=oe._miller_index_h,  # int
+                                                 miller_k=oe._miller_index_k,  # int
+                                                 miller_l=oe._miller_index_l,  # int
+                                                 asymmetry_angle=0.0,  # radians (mosaic crystals are symmetric)
+                                                 azimuthal_angle=0.0)
+        elif oe._material_constants_library_flag == 1:
+            if is_verbose(): print("\nCreating a diffraction setup (DABAX) for material:", oe._material)
+            diffraction_setup = DiffractionSetupDabax(geometry_type=BraggDiffraction(),
+                                                 crystal_name=oe._material,  # string
+                                                 thickness=oe._thickness,  # meters
+                                                 miller_h=oe._miller_index_h,  # int
+                                                 miller_k=oe._miller_index_k,  # int
+                                                 miller_l=oe._miller_index_l,  # int
+                                                 asymmetry_angle=0.0,  # radians (mosaic crystals are symmetric)
+                                                 azimuthal_angle=0.0,
+                                                 dabax=oe._dabax)
+        elif oe._material_constants_library_flag == 2:
+            if is_verbose(): print("\nCreating a diffraction setup (shadow preprocessor file V1)...")
+            diffraction_setup = DiffractionSetupShadowPreprocessorV1(geometry_type=BraggDiffraction(),
+                                                 crystal_name=oe._material,            # string
+                                                 thickness=oe._thickness,              # meters
+                                                 miller_h=oe._miller_index_h,          # int
+                                                 miller_k=oe._miller_index_k,          # int
+                                                 miller_l=oe._miller_index_l,          # int
+                                                 asymmetry_angle=0.0,  # radians (mosaic crystals are symmetric)
+                                                 azimuthal_angle=0.0,
+                                                 preprocessor_file=oe._file_refl)
+        elif oe._material_constants_library_flag == 3:
+            if is_verbose(): print("\nCreating a diffraction setup (shadow preprocessor file V2)...")
+            diffraction_setup = DiffractionSetupShadowPreprocessorV2(geometry_type=BraggDiffraction(),
+                                                 crystal_name=oe._material,            # string
+                                                 thickness=oe._thickness,              # meters
+                                                 miller_h=oe._miller_index_h,          # int
+                                                 miller_k=oe._miller_index_k,          # int
+                                                 miller_l=oe._miller_index_l,          # int
+                                                 asymmetry_angle=0.0,  # radians (mosaic crystals are symmetric)
+                                                 azimuthal_angle=0.0,
+                                                 preprocessor_file=oe._file_refl)
+        else:
+            raise NotImplementedError
+
+        self._crystalpy_diffraction_setup = diffraction_setup
 
     def align_crystal(self):
         """
@@ -348,9 +391,9 @@ class S4MosaicCrystalElement(S4BeamlineElement):
         flag_lost_value = params.get("flag_lost_value", -1)
         change_reference_system_in = params.get("change_reference_system_in", True)
         change_reference_system_out = params.get("change_reference_system_out", True)
-        print(">>>>>> change_reference_system: ", change_reference_system_in, change_reference_system_out)
 
         if is_verbose():
+            print(">>>>>> change_reference_system: ", change_reference_system_in, change_reference_system_out)
             if not change_reference_system_in:
                 print("change_reference_system_in = False: skipping reference change to o.e.")
             if not change_reference_system_out:
@@ -539,8 +582,6 @@ class S4MosaicCrystalElement(S4BeamlineElement):
 
         Raises
         ------
-        NotImplementedError
-            If the crystal cut is asymmetric.
         ValueError
             If the thickness is not finite and non-negative, the Gaussian
             mosaicity FWHM is not finite and positive, or the absorption
@@ -619,8 +660,6 @@ class S4MosaicCrystalElement(S4BeamlineElement):
 
         Raises
         ------
-        NotImplementedError
-            If the crystal cut is asymmetric.
         ValueError
             If the thickness is not finite and non-negative, the Gaussian
             mosaicity FWHM is not finite and positive, or the beta sampling
@@ -706,8 +745,6 @@ class S4MosaicCrystalElement(S4BeamlineElement):
 
         Raises
         ------
-        NotImplementedError
-            If the crystal cut is asymmetric.
         ValueError
             If the thickness is not finite and non-negative or the Gaussian
             mosaicity FWHM is not finite and positive.
@@ -842,17 +879,6 @@ class S4MosaicCrystalElement(S4BeamlineElement):
         J11 = r_PP
 
         # rotation matrix R
-        if True:  # todo delete, only for test
-            # c = e_S[:, 0] # cos of angle between e_S and the x axis
-            c = vector_dot(e_S, ee_S)
-            s = numpy.sqrt(1 - c ** 2)  # sin
-            if is_verbose(): print(">>> s, c, angle: ", s[0], c[0], numpy.degrees(numpy.arctan2(s[0], c[0])))
-            R00 = c
-            R01 = -s
-            R10 = s
-            R11 = c
-            if is_verbose(): print(">>> R angles: ", R00[0], R01[0], R10[0], R11[0])
-
         R00 = vector_dot(e_S, es_S)
         R01 = vector_dot(e_S, es_P)
         R10 = vector_dot(e_P, es_S)
